@@ -169,9 +169,20 @@ def preprocess_for_char_cnn(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL'], ou
     for col in text_columns[1:]:
         df[output_column] = df[output_column] + df[col].fillna(' ')
     
-    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df[output_column].values))
     return df
 
+preprocess_v2 = lambda x:re.sub('[^ a-zA-Z0-9%@_()\[\]]',' ',nlp_utils.clean_text(x)) if x is not None and type(x)==str else x
+def preprocess_for_fasttext_cmd(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL'], output_column="char",jobs=32):
+    """
+    Preprocess and convert all text columns to one column named text
+    """
+    df[output_column] = df[text_columns[0]].fillna(' ')
+    for col in text_columns[1:]:
+        df[output_column] = df[output_column] + df[col].fillna(' ')
+    
+    text = Parallel(n_jobs=jobs, backend="loky")(delayed(preprocess_v2)(x) for x in tqdm(df[output_column].values))
+    df[output_column] = text
+    return df
 
 
 def conv_layer(inputs, n_kernels=32, kernel_size=3, dropout=0.1,dilation_rate=1, padding='valid'):
