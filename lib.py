@@ -71,7 +71,7 @@ def build_dict(data, vocab_size = 50000,min_count=5):
     return word_dict
 
 
-def get_text_le(colname="GL"):
+def get_text_le(colname):
     le = {}
     INFREQ = 1
     NOWORD = 0
@@ -94,6 +94,46 @@ def get_text_le(colname="GL"):
         
     return le_train,le_transform, le
 
+
+def build_char_dict(data, vocab_size = 128,min_count=100):
+    """Construct and return a dictionary mapping each of the most frequently appearing words to a unique integer."""
+    
+    word_count = Counter() # A dict storing the words that appear in the reviews along with how often they occur
+    for sentence in tqdm(data):
+        word_count.update(list(sentence))
+    
+    print("Total Words before Min frequency filtering",len(word_count))
+    sorted_chars = [word for word,freq in word_count.most_common() if freq>=min_count]
+    print("Total Words after Min frequency filtering",len(sorted_chars))
+    char_dict = {} # This is what we are building, a dictionary that translates words into integers
+    for idx, word in enumerate(sorted_chars[:vocab_size - 2]): # The -2 is so that we save room for the 'no word'
+        char_dict[word] = idx + 2                              # 'infrequent' labels
+        
+    return char_dict
+
+
+def get_char_le(colname):
+    le = {}
+    INFREQ = 1
+    NOWORD = 0
+    def le_train(df):
+        le['wd'] = build_char_dict(df[colname].values)
+        return le['wd']
+    
+    def char2label(char):
+        char_dict = le['wd']
+        if char in char_dict:
+            return char_dict[char]
+        else:
+            return INFREQ
+    def sentence2labels(wordarray):
+        return list(map(char2label,wordarray))
+    def le_transform(df):
+        char_list = [sentence2labels(x) for x in tqdm(df[colname])]
+        return char_list
+        
+    return le_train,le_transform, le
+
 def get_le(colname="GL"):
     le = LabelEncoder()
     UNKNOWN_TOKEN = '<unknown>'
@@ -108,17 +148,28 @@ preprocess_string = lambda x:re.sub('[^ a-zA-Z0-9%@_]',' ',nlp_utils.clean_text(
 
 
 
-def preprocess_for_word_cnn(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL'], output_column="text",jobs=40):
+def preprocess_for_word_cnn(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL'], output_column="text",jobs=20):
     """
     Preprocess and convert all text columns to one column named text
     """
     pp = lambda text: nlp_utils.combined_text_processing(preprocess_string(text))
-    df['text'] = df[text_columns[0]].fillna(' ')
+    df[output_column] = df[text_columns[0]].fillna(' ')
     for col in text_columns[1:]:
-        df['text'] = df['text'] + df[col].fillna(' ')
+        df[output_column] = df[output_column] + df[col].fillna(' ')
     
-    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df['text'].values))
-    df['text'] = text
+    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df[output_column].values))
+    df[output_column] = text
+    return df
+
+def preprocess_for_char_cnn(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL'], output_column="char",jobs=20):
+    """
+    Preprocess and convert all text columns to one column named text
+    """
+    df[output_column] = df[text_columns[0]].fillna(' ')
+    for col in text_columns[1:]:
+        df[output_column] = df[output_column] + df[col].fillna(' ')
+    
+    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df[output_column].values))
     return df
 
 
