@@ -239,7 +239,8 @@ class PreTrainedEmbeddingsTransformer:
         print("Number of Unique Test Tokens for Fasttext transform %s"%len(uniq_tokens))
         empty = np.full(self.size, 0)
         token2vec = {k: self.model.wv[k] if k in self.model.wv else empty for k in uniq_tokens}
-        token2vec = {k: np.nan_to_num(v / np.linalg.norm(v)) for k, v in token2vec.items()}
+        # token2vec = {k: np.nan_to_num(v / np.linalg.norm(v)) for k, v in token2vec.items()}
+        token2vec = {k: np.nan_to_num(v) for k, v in token2vec.items()}
 
 
         def tokens2vec(token_array):
