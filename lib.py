@@ -246,7 +246,7 @@ class PreTrainedEmbeddingsTransformer:
         def tokens2vec(token_array):
             empty = np.full(self.size, 0)
             if len(token_array) == 0:
-                return empty
+                return [empty]
             return [token2vec[token] if token in uniq_tokens else empty for token in token_array]
 
         # ft_vecs = list(map(tokens2vec, X))
