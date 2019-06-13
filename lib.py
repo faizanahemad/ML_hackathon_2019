@@ -211,9 +211,9 @@ def grouped_layer(inputs, group_configs, out_channels):
     groups = []
     for group_config in group_configs:
         out1 = inputs
-    for layer_config in group_config:
-        out1 = conv_layer(out1, **layer_config)
-    groups.append(out1)
+        for layer_config in group_config:
+            out1 = conv_layer(out1, **layer_config)
+        groups.append(out1)
     y = concatenate(groups)
     y = transition_layer(y, out_channels)
     return y
