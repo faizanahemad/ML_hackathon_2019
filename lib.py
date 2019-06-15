@@ -185,16 +185,17 @@ def preprocess_for_fasttext_cmd(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL']
     return df
 
 
-def conv_layer(inputs, n_kernels=32, kernel_size=3, dropout=0.1,dilation_rate=1, padding='valid'):
+def conv_layer(inputs, n_kernels=32, kernel_size=3, dropout=0, dilation_rate=1, padding='valid', strides=1):
     out = Conv1D(n_kernels,
                 kernel_size=kernel_size,
-                strides=1,
+                strides=strides,
                 padding=padding,
                 kernel_regularizer=l2(1e-4),
+                activation='relu',
                 dilation_rate=dilation_rate)(inputs)
     out = BatchNormalization()(out)
-    out = Activation("relu")(out)
-    out = Dropout(dropout)(out)
+    if dropout>1e-8:
+        out = Dropout(dropout)(out)
     return out
 
 def transition_layer(inputs, n_kernels=32,dropout=0):
