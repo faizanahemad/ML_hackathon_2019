@@ -1,6 +1,7 @@
 import numpy as np
 from collections import Counter
 from tqdm import tqdm_notebook as tqdm
+from tqdm import tqdm as tqdm_plain
 
 from keras import backend as K
 import time
@@ -180,7 +181,7 @@ def preprocess_for_fasttext_cmd(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL']
     for col in text_columns[1:]:
         df[output_column] = df[output_column] + df[col].fillna(' ')
     
-    text = Parallel(n_jobs=jobs, backend="loky")(delayed(preprocess_v2)(x) for x in tqdm(df[output_column].values))
+    text = Parallel(n_jobs=jobs, backend="loky")(delayed(preprocess_v2)(x) for x in tqdm_plain(df[output_column].values))
     df[output_column] = text
     return df
 
@@ -251,7 +252,7 @@ class PreTrainedEmbeddingsTransformer:
             return [token2vec[token] if token in uniq_tokens else empty for token in token_array]
 
         # ft_vecs = list(map(tokens2vec, X))
-        ft_vecs = [tokens2vec(t) for t in tqdm(X)]
+        ft_vecs = [tokens2vec(t) for t in tqdm_plain(X)]
         ft_vecs = np.array(ft_vecs)
         print("Fasttext Transforms done at: %s" % (str(pd.datetime.now())))
         return ft_vecs
@@ -262,5 +263,84 @@ class PreTrainedEmbeddingsTransformer:
     def fit_transform(self, X, y='ignored'):
         self.fit(X)
         return self.transform(X)
+    
+def visualize_words_in_price_range(df_train, range_1 =(0,1000),range_2 =(20000,30000), topn=10):
+    # use tf-idf style for in range vs out of range
+    # so you take top 100 words whose in-range-freq/out-range-freq is highest
+    
+    df_in_range = df_train[(df_train["PRICE"]>=range_1[0])&(df_train["PRICE"]<range_1[1])]
+    df_out_range = df_train[(df_train["PRICE"]<range_1[0])|(df_train["PRICE"]>range_1[1])]
+    in_words = list(filter(lambda x:len(x)>4,flatten(df_in_range['text'].values)))
+    out_words = list(filter(lambda x:len(x)>4,flatten(df_out_range['text'].values)))
+    inctr = Counter(in_words)
+    outctr = Counter(out_words)
+    r1 = sorted([(word,freq/(outctr[word]+1),freq) for word,freq in inctr.most_common(1000) if outctr[word]>=1],key=operator.itemgetter(1),reverse=True)
+    r1 = pd.DataFrame(r1,columns=["word","tf-idf","frequency"])
+    
+    df_in_range = df_train[(df_train["PRICE"]>=range_2[0])&(df_train["PRICE"]<range_2[1])]
+    df_out_range = df_train[(df_train["PRICE"]<range_2[0])|(df_train["PRICE"]>range_2[1])]
+    in_words = list(filter(lambda x:len(x)>4,flatten(df_in_range['text'].values)))
+    out_words = list(filter(lambda x:len(x)>4,flatten(df_out_range['text'].values)))
+    inctr = Counter(in_words)
+    outctr = Counter(out_words)
+    r2 = sorted([(word,freq/(outctr[word]+1),freq) for word,freq in inctr.most_common(1000) if outctr[word]>=1],key=operator.itemgetter(1),reverse=True)
+    r2 = pd.DataFrame(r2,columns=["word","tf-idf","frequency"])
+    
+    fig = plt.figure(figsize=(20,10));
+    ax = fig.add_subplot(1, 2, 1)
+    ax.set_title("Word vs Relative Frequency for %s - %s"%(range_1[0],range_1[1]))
+    sns.barplot(x="tf-idf", y="word", data=r1.head(topn), color="b", ax = ax);
+    
+    ax = fig.add_subplot(1, 2, 2)
+    ax.set_title("Word vs Relative Frequency for %s - %s"%(range_2[0],range_2[1]))
+    sns.barplot(x="tf-idf", y="word", data=r2.head(topn), color="b", ax = ax);
+    
+    plt.show();
+    
+def visualize_filter_price_range(lower,upper,num_examples=5,cmap=None):
+    image_size_multiplier = 4
+    rows = 2
+    columns = num_examples
+    fig_height = rows * image_size_multiplier * 2
+    fig_width = num_examples * image_size_multiplier
+
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    plt.subplots_adjust(bottom=0.1, top=0.8)
+    
+    idx = np.where((y_train >= lower[0]) & (y_train <= lower[1]))[0]
+    idx = sample(list(idx), num_examples)
+    
+    imgs = []
+    preds = []
+    actuals = []
+    vmin, vmax = None,None
+    for i in idx:
+        pred = model.predict([x_train[i:i+1],x_gl_train[i:i+1], x_train_pt[i:i+1],train_gl_stats[i:i+1]])
+        img = visualizer.predict([x_train[i:i+1],x_train_pt[i:i+1]])
+        img = img.reshape((img.shape[1],img.shape[2]))
+        imgs.append(img)
+        preds.append(pred)
+        actuals.append(y_train[i])
+     
+    idx = np.where((y_train >= upper[0]) & (y_train <= upper[1]))[0]
+    idx = sample(list(idx), num_examples)
+        
+    for i in idx:
+        pred = model.predict([x_train[i:i+1],x_gl_train[i:i+1], x_train_pt[i:i+1],train_gl_stats[i:i+1]])
+        img = visualizer.predict([x_train[i:i+1],x_train_pt[i:i+1]])
+        img = img.reshape((img.shape[1],img.shape[2]))
+        imgs.append(img)
+        preds.append(pred)
+        actuals.append(y_train[i])
+        
+    imgs = np.array(imgs)
+    vmin,vmax = np.min(imgs),np.max(vmax)
+    jdx = 1
+    for i,pred in enumerate(preds):
+        ax = fig.add_subplot(rows * 2, columns, jdx, xticks=[], yticks=[])
+        ax.imshow(imgs[i], cmap=cmap,vmin=vmin,vmax=vmax)
+        ax.set_title("Actual = %.0f, Predicted = %.0f"%(actuals[i],pred))
+        jdx += 1
+        
 
     
