@@ -55,7 +55,7 @@ from more_itertools import flatten
 import ast
 from sklearn.preprocessing import LabelEncoder
 
-def build_dict(data, vocab_size = 50000,min_count=5):
+def build_dict(data, vocab_size = 100000,min_count=5):
     """Construct and return a dictionary mapping each of the most frequently appearing words to a unique integer."""
     
     word_count = Counter() # A dict storing the words that appear in the reviews along with how often they occur
@@ -72,13 +72,13 @@ def build_dict(data, vocab_size = 50000,min_count=5):
     return word_dict
 
 
-def get_text_le(colname):
+def get_text_le(colname, vocab_size=100000):
     le = {}
     INFREQ = 1
     NOWORD = 0
     UNKNOWN_TOKEN = '<unknown>'
     def le_train(df):
-        le['wd'] = build_dict(df[colname].values)
+        le['wd'] = build_dict(df[colname].values,vocab_size=vocab_size)
         return le['wd']
     
     def word2label(word):
@@ -159,6 +159,16 @@ def preprocess_for_word_cnn(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL'], ou
         df[output_column] = df[output_column] + df[col].fillna(' ')
     
     text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df[output_column].values))
+    df[output_column] = text
+    return df
+
+
+def preprocess_for_word_cnn_v2(df, text_column='text_raw', output_column="text",word_length_filter=2, jobs=20):
+    """
+    Preprocess and convert all text columns to one column named text
+    """
+    pp = lambda text: nlp_utils.combined_text_processing(text, word_length_filter=word_length_filter)
+    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df[text_column].fillna(' ').values))
     df[output_column] = text
     return df
 
@@ -296,51 +306,4 @@ def visualize_words_in_price_range(df_train, range_1 =(0,1000),range_2 =(20000,3
     sns.barplot(x="tf-idf", y="word", data=r2.head(topn), color="b", ax = ax);
     
     plt.show();
-    
-def visualize_filter_price_range(lower,upper,num_examples=5,cmap=None):
-    image_size_multiplier = 4
-    rows = 2
-    columns = num_examples
-    fig_height = rows * image_size_multiplier * 2
-    fig_width = num_examples * image_size_multiplier
-
-    fig = plt.figure(figsize=(fig_width, fig_height))
-    plt.subplots_adjust(bottom=0.1, top=0.8)
-    
-    idx = np.where((y_train >= lower[0]) & (y_train <= lower[1]))[0]
-    idx = sample(list(idx), num_examples)
-    
-    imgs = []
-    preds = []
-    actuals = []
-    vmin, vmax = None,None
-    for i in idx:
-        pred = model.predict([x_train[i:i+1],x_gl_train[i:i+1], x_train_pt[i:i+1],train_gl_stats[i:i+1]])
-        img = visualizer.predict([x_train[i:i+1],x_train_pt[i:i+1]])
-        img = img.reshape((img.shape[1],img.shape[2]))
-        imgs.append(img)
-        preds.append(pred)
-        actuals.append(y_train[i])
-     
-    idx = np.where((y_train >= upper[0]) & (y_train <= upper[1]))[0]
-    idx = sample(list(idx), num_examples)
-        
-    for i in idx:
-        pred = model.predict([x_train[i:i+1],x_gl_train[i:i+1], x_train_pt[i:i+1],train_gl_stats[i:i+1]])
-        img = visualizer.predict([x_train[i:i+1],x_train_pt[i:i+1]])
-        img = img.reshape((img.shape[1],img.shape[2]))
-        imgs.append(img)
-        preds.append(pred)
-        actuals.append(y_train[i])
-        
-    imgs = np.array(imgs)
-    vmin,vmax = np.min(imgs),np.max(vmax)
-    jdx = 1
-    for i,pred in enumerate(preds):
-        ax = fig.add_subplot(rows * 2, columns, jdx, xticks=[], yticks=[])
-        ax.imshow(imgs[i], cmap=cmap,vmin=vmin,vmax=vmax)
-        ax.set_title("Actual = %.0f, Predicted = %.0f"%(actuals[i],pred))
-        jdx += 1
-        
-
     
