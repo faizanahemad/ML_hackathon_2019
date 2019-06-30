@@ -126,15 +126,17 @@ def preprocess_for_word_cnn(df, text_column='text_raw', output_column="text", wo
 
 
 
-def conv_layer(inputs, n_kernels=32, kernel_size=3, dropout=0, dilation_rate=1, padding='valid', strides=1):
+def conv_layer(inputs, n_kernels=32, kernel_size=3, dropout=0,spatial_dropout=0.1,
+               dilation_rate=1, padding='valid', strides=1):
     out = Conv1D(n_kernels,
                  kernel_size=kernel_size,
                  strides=strides,
                  padding=padding,
                  kernel_regularizer=l2(1e-4),
-                 activation='relu',
                  dilation_rate=dilation_rate)(inputs)
     out = BatchNormalization()(out)
+    out = Activation('relu')(out)
+    out = SpatialDropout2D(spatial_dropout)(out) if spatial_dropout > 1e-8 else out
     if dropout > 1e-8:
         out = Dropout(dropout)(out)
     return out
