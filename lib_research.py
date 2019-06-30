@@ -30,7 +30,7 @@ from data_science_utils.vision.keras import *
 from time import time
 import pandas as pd
 import numpy as np
-
+from keras.layers.core import SpatialDropout2D,SpatialDropout1D
 import missingno as msno
 import re
 from joblib import Parallel, delayed
@@ -136,7 +136,7 @@ def conv_layer(inputs, n_kernels=32, kernel_size=3, dropout=0,spatial_dropout=0.
                  dilation_rate=dilation_rate)(inputs)
     out = BatchNormalization()(out)
     out = Activation('relu')(out)
-    out = SpatialDropout2D(spatial_dropout)(out) if spatial_dropout > 1e-8 else out
+    out = SpatialDropout1D(spatial_dropout)(out) if spatial_dropout > 1e-8 else out
     if dropout > 1e-8:
         out = Dropout(dropout)(out)
     return out
