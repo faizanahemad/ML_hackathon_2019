@@ -139,6 +139,14 @@ def conv_layer(inputs, n_kernels=32, kernel_size=3, dropout=0, dilation_rate=1, 
         out = Dropout(dropout)(out)
     return out
 
+def fc_layer(inputs, neurons=32, dropout=0, bn=True):
+    out = Dense(neurons)(inputs)
+    out = BatchNormalization()(out) if bn else out
+    out = Activation('relu')(out)
+    if dropout > 1e-8:
+        out = Dropout(dropout)(out)
+    return out
+
 
 def transition_layer(inputs, n_kernels=32, dropout=0):
     out = conv_layer(inputs, n_kernels, kernel_size=1, dropout=dropout, padding='same')
@@ -151,7 +159,15 @@ def pre_dense_layer(inputs):
     out = concatenate([out1, out2])
     return out
 
-
+def pad_text_sequences(sequences,maxlen,empty='',jobs=2):
+    def pad(seq):
+        ls = len(seq)
+        len_empty = maxlen - ls
+        if len_empty<=0:
+            return seq[:maxlen] if ls>maxlen else seq
+        return [empty]*len_empty + list(seq)
+    sequences = Parallel(n_jobs=jobs, backend="loky")(delayed(pad)(x) for x in tqdm(sequences))
+    return sequences
 
 class PreTrainedEmbeddingsTransformer:
     def __init__(self, model="fasttext-wiki-news-subwords-300", size=300,
@@ -159,6 +175,7 @@ class PreTrainedEmbeddingsTransformer:
         self.normalize_word_vectors = normalize_word_vectors
         self.model = model
         self.size = size
+        self.token2vec_dict = {}
 
     def fit(self, X=None, y='ignored'):
         if type(self.model) == str:
@@ -168,14 +185,15 @@ class PreTrainedEmbeddingsTransformer:
         self.fit(X, y='ignored')
 
     def transform(self, X, y='ignored'):
-        print("Fasttext Transforms start at: %s" % (str(pd.datetime.now())))
         uniq_tokens = set(more_itertools.flatten(X))
-        print("Number of Unique Test Tokens for Fasttext transform %s" % len(uniq_tokens))
+        uniq_tokens = uniq_tokens - self.token2vec_dict.keys()
         empty = np.full(self.size, 0)
         token2vec = {k: self.model.wv[k] if k in self.model.wv else empty for k in uniq_tokens}
         # token2vec = {k: np.nan_to_num(v / np.linalg.norm(v)) for k, v in token2vec.items()}
         token2vec = {k: np.nan_to_num(v) for k, v in token2vec.items()}
-
+        self.token2vec_dict.update(token2vec)
+        token2vec = self.token2vec_dict
+        uniq_tokens = set(token2vec.keys())
         def tokens2vec(token_array):
             empty = np.full(self.size, 0)
             if len(token_array) == 0:
@@ -183,9 +201,8 @@ class PreTrainedEmbeddingsTransformer:
             return [token2vec[token] if token in uniq_tokens else empty for token in token_array]
 
         # ft_vecs = list(map(tokens2vec, X))
-        ft_vecs = [tokens2vec(t) for t in tqdm_plain(X)]
+        ft_vecs = [tokens2vec(t) for t in X]
         ft_vecs = np.array(ft_vecs)
-        print("Fasttext Transforms done at: %s" % (str(pd.datetime.now())))
         return ft_vecs
 
     def inverse_transform(self, X, copy=None):
