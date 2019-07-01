@@ -59,7 +59,7 @@ def build_dict(data, vocab_size = 100000,min_count=5):
     """Construct and return a dictionary mapping each of the most frequently appearing words to a unique integer."""
     
     word_count = Counter() # A dict storing the words that appear in the reviews along with how often they occur
-    for sentence in tqdm(data):
+    for sentence in tqdm_plain(data):
         word_count.update(sentence)
     
     print("Total Words before Min frequency filtering",len(word_count))
@@ -90,7 +90,7 @@ def get_text_le(colname, vocab_size=100000):
     def wordarray2labels(wordarray):
         return list(map(word2label,wordarray))
     def le_transform(df):
-        word_list = [wordarray2labels(x) for x in tqdm(df[colname])]
+        word_list = [wordarray2labels(x) for x in tqdm_plain(df[colname])]
         return word_list
         
     return le_train,le_transform, le
@@ -100,7 +100,7 @@ def build_char_dict(data, vocab_size = 128,min_count=100):
     """Construct and return a dictionary mapping each of the most frequently appearing words to a unique integer."""
     
     word_count = Counter() # A dict storing the words that appear in the reviews along with how often they occur
-    for sentence in tqdm(data):
+    for sentence in tqdm_plain(data):
         word_count.update(list(sentence))
     
     print("Total Words before Min frequency filtering",len(word_count))
@@ -130,7 +130,7 @@ def get_char_le(colname):
     def sentence2labels(wordarray):
         return list(map(char2label,wordarray))
     def le_transform(df):
-        char_list = [sentence2labels(x) for x in tqdm(df[colname])]
+        char_list = [sentence2labels(x) for x in tqdm_plain(df[colname])]
         return char_list
         
     return le_train,le_transform, le
@@ -158,7 +158,7 @@ def preprocess_for_word_cnn(df,text_columns=['TITLE', 'BULLET_POINTS', 'GL'], ou
     for col in text_columns[1:]:
         df[output_column] = df[output_column] + df[col].fillna(' ')
     
-    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df[output_column].values))
+    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm_plain(df[output_column].values))
     df[output_column] = text
     return df
 
@@ -168,7 +168,7 @@ def preprocess_for_word_cnn_v2(df, text_column='text_raw', output_column="text",
     Preprocess and convert all text columns to one column named text
     """
     pp = lambda text: nlp_utils.combined_text_processing(text, word_length_filter=word_length_filter)
-    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm(df[text_column].fillna(' ').values))
+    text = Parallel(n_jobs=jobs, backend="loky")(delayed(pp)(x) for x in tqdm_plain(df[text_column].fillna(' ').values))
     df[output_column] = text
     return df
 
@@ -306,4 +306,3 @@ def visualize_words_in_price_range(df_train, range_1 =(0,1000),range_2 =(20000,3
     sns.barplot(x="tf-idf", y="word", data=r2.head(topn), color="b", ax = ax);
     
     plt.show();
-    
